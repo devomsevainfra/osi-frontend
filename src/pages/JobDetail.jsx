@@ -43,17 +43,87 @@ const INITIAL_FORM = {
   portfolioLink: '',
 };
 
+// ── Inline field error component ────────────────────────────────────────────
+function FieldError({ message }) {
+  if (!message) return null;
+  return (
+    <p className="text-[11px] text-red-500 font-body mt-1 flex items-center gap-1">
+      <AlertCircle size={11} className="shrink-0" />
+      {message}
+    </p>
+  );
+}
+
+// ── Validation helpers ──────────────────────────────────────────────────────
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^[+]?[\d\s\-()]{10,}$/;
+const URL_RE = /^https?:\/\/.+/i;
+
+function validateForm(form) {
+  const errors = {};
+
+  // Full Name — required
+  if (!form.fullName.trim()) {
+    errors.fullName = 'Full name is required.';
+  }
+
+  // Email — required + format
+  if (!form.email.trim()) {
+    errors.email = 'Email address is required.';
+  } else if (!EMAIL_RE.test(form.email.trim())) {
+    errors.email = 'Please enter a valid email address.';
+  }
+
+  // Phone — required + format
+  if (!form.phoneNumber.trim()) {
+    errors.phoneNumber = 'Phone number is required.';
+  } else if (!PHONE_RE.test(form.phoneNumber.trim())) {
+    errors.phoneNumber = 'Please enter a valid phone number (min 10 digits).';
+  }
+
+  // Years of experience — must be 0–60 if provided
+  if (form.yearsOfExperience !== '') {
+    const yoe = Number(form.yearsOfExperience);
+    if (isNaN(yoe) || yoe < 0 || yoe > 60) {
+      errors.yearsOfExperience = 'Enter a value between 0 and 60.';
+    }
+  }
+
+  // Resume link — required + must look like a URL
+  if (!form.resumeLink.trim()) {
+    errors.resumeLink = 'Resume link is required.';
+  } else if (!URL_RE.test(form.resumeLink.trim())) {
+    errors.resumeLink = 'Please enter a valid URL starting with http:// or https://';
+  }
+
+  // Portfolio link — optional, but validate format if filled
+  if (form.portfolioLink.trim() && !URL_RE.test(form.portfolioLink.trim())) {
+    errors.portfolioLink = 'Please enter a valid URL starting with http:// or https://';
+  }
+
+  return errors;
+}
+
 function ApplicationForm({ jobId }) {
-  const [form, setForm]               = useState(INITIAL_FORM);
-  const [otherLinks, setOtherLinks]   = useState(['']);
-  const [submitting, setSubmitting]   = useState(false);
-  const [success, setSuccess]         = useState(false);
-  const [error, setError]             = useState('');
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [otherLinks, setOtherLinks] = useState(['']);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   function handleChange(e) {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
     if (error) setError('');
+    // Clear the inline error for this field as the user types
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
   }
 
   function handleLinkChange(idx, val) {
@@ -70,6 +140,16 @@ function ApplicationForm({ jobId }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+
+    // ── Client-side validation ──
+    const errors = validateForm(form);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError('Please fix the highlighted fields before submitting.');
+      return;
+    }
+    setFieldErrors({});
+
     setSubmitting(true);
     setError('');
 
@@ -78,6 +158,8 @@ function ApplicationForm({ jobId }) {
       jobId,
       yearsOfExperience: form.yearsOfExperience !== '' ? Number(form.yearsOfExperience) : undefined,
       otherDocumentLinks: otherLinks.filter(l => l.trim() !== ''),
+      // Only include portfolioLink if it has a value
+      portfolioLink: form.portfolioLink.trim() || undefined,
     };
 
     try {
@@ -85,8 +167,9 @@ function ApplicationForm({ jobId }) {
       setSuccess(true);
       setForm(INITIAL_FORM);
       setOtherLinks(['']);
+      setFieldErrors({});
     } catch (err) {
-      const status  = err.response?.status;
+      const status = err.response?.status;
       const message = err.response?.data?.message;
 
       if (status === 409) {
@@ -101,6 +184,10 @@ function ApplicationForm({ jobId }) {
       setSubmitting(false);
     }
   }
+
+  // Input class that turns red on error
+  const inputClsFor = (name) =>
+    `${inputCls} ${fieldErrors[name] ? '!border-red-400 focus:!border-red-500' : ''}`;
 
   if (success) {
     return (
@@ -123,7 +210,7 @@ function ApplicationForm({ jobId }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
       {/* Row 1: Name + Email */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
@@ -131,22 +218,24 @@ function ApplicationForm({ jobId }) {
             <User size={12} /> Full Name *
           </label>
           <input
-            id="app-fullName" name="fullName" type="text" required
+            id="app-fullName" name="fullName" type="text"
             value={form.fullName} onChange={handleChange}
             placeholder="e.g. Priya Sharma"
-            className={inputCls}
+            className={inputClsFor('fullName')}
           />
+          <FieldError message={fieldErrors.fullName} />
         </div>
         <div>
           <label htmlFor="app-email" className={labelCls}>
             <Mail size={12} /> Email Address *
           </label>
           <input
-            id="app-email" name="email" type="email" required
+            id="app-email" name="email" type="email"
             value={form.email} onChange={handleChange}
             placeholder="e.g. priya@example.com"
-            className={inputCls}
+            className={inputClsFor('email')}
           />
+          <FieldError message={fieldErrors.email} />
         </div>
       </div>
 
@@ -157,11 +246,12 @@ function ApplicationForm({ jobId }) {
             <Phone size={12} /> Phone Number *
           </label>
           <input
-            id="app-phoneNumber" name="phoneNumber" type="tel" required
+            id="app-phoneNumber" name="phoneNumber" type="tel"
             value={form.phoneNumber} onChange={handleChange}
             placeholder="e.g. +91 98765 43210"
-            className={inputCls}
+            className={inputClsFor('phoneNumber')}
           />
+          <FieldError message={fieldErrors.phoneNumber} />
         </div>
         <div>
           <label htmlFor="app-currentLocation" className={labelCls}>
@@ -198,8 +288,9 @@ function ApplicationForm({ jobId }) {
             min={0} max={60}
             value={form.yearsOfExperience} onChange={handleChange}
             placeholder="e.g. 5"
-            className={inputCls}
+            className={inputClsFor('yearsOfExperience')}
           />
+          <FieldError message={fieldErrors.yearsOfExperience} />
         </div>
       </div>
 
@@ -209,33 +300,39 @@ function ApplicationForm({ jobId }) {
           <LinkIcon size={12} /> Resume Link *
         </label>
         <input
-          id="app-resumeLink" name="resumeLink" type="url" required
+          id="app-resumeLink" name="resumeLink" type="url"
           value={form.resumeLink} onChange={handleChange}
           placeholder="https://drive.google.com/file/…"
-          className={inputCls}
+          className={inputClsFor('resumeLink')}
         />
-        <p className="text-[11px] text-brand-gray font-body mt-1">
-          Paste a public link (Google Drive, Dropbox, etc.) — no file upload
-        </p>
+        <FieldError message={fieldErrors.resumeLink} />
+        {!fieldErrors.resumeLink && (
+          <p className="text-[11px] text-brand-gray font-body mt-1">
+            Paste a public link (Google Drive, Dropbox, etc.) — no file upload
+          </p>
+        )}
       </div>
 
-      {/* Portfolio Link */}
+      {/* Portfolio Link (optional) */}
       <div>
         <label htmlFor="app-portfolioLink" className={labelCls}>
           <LinkIcon size={12} /> Portfolio Link
+          <span className="text-brand-gray font-normal normal-case tracking-normal ml-1">(optional)</span>
         </label>
         <input
           id="app-portfolioLink" name="portfolioLink" type="url"
           value={form.portfolioLink} onChange={handleChange}
           placeholder="https://yourportfolio.com"
-          className={inputCls}
+          className={inputClsFor('portfolioLink')}
         />
+        <FieldError message={fieldErrors.portfolioLink} />
       </div>
 
       {/* Other Document Links */}
       <div>
         <label className={labelCls}>
           <FileText size={12} /> Other Document Links
+          <span className="text-brand-gray font-normal normal-case tracking-normal ml-1">(optional)</span>
         </label>
         <div className="flex flex-col gap-2">
           {otherLinks.map((link, idx) => (
@@ -320,9 +417,9 @@ function ApplicationForm({ jobId }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function JobDetail() {
   const { id } = useParams();
-  const [job, setJob]         = useState(null);
+  const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+  const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const formRef = useRef(null);
 
@@ -404,16 +501,16 @@ export function JobDetail() {
                 Careers at Om Seva
               </p>
               <div className="flex flex-wrap gap-2 items-center mb-5">
-            {job.department && (
-              <span className="bg-brand-green/10 text-brand-green text-xs font-semibold px-3 py-1.5 rounded-full border border-brand-green/20 font-body">
-                {job.department}
-              </span>
-            )}
-            {job.employmentType && (
-              <span className="bg-brand-bg text-brand-gray text-xs font-semibold px-3 py-1.5 rounded-full border border-brand-border font-body">
-                {job.employmentType}
-              </span>
-            )}
+                {job.department && (
+                  <span className="bg-brand-green/10 text-brand-green text-xs font-semibold px-3 py-1.5 rounded-full border border-brand-green/20 font-body">
+                    {job.department}
+                  </span>
+                )}
+                {job.employmentType && (
+                  <span className="bg-brand-bg text-brand-gray text-xs font-semibold px-3 py-1.5 rounded-full border border-brand-border font-body">
+                    {job.employmentType}
+                  </span>
+                )}
               </div>
               <h1 className="text-3xl md:text-5xl font-bold font-display text-brand-black leading-tight max-w-4xl break-words">
                 {job.title}
@@ -455,11 +552,11 @@ export function JobDetail() {
             </div>
 
             <div className="flex flex-col gap-5">
-              {job.location      && <MetaItem icon={MapPin}    label="Location"          value={job.location} />}
-              {job.employmentType && <MetaItem icon={Briefcase} label="Employment Type"   value={job.employmentType} />}
-              {job.experienceLevel && <MetaItem icon={Award}   label="Experience Level"  value={job.experienceLevel} />}
-              {job.department    && <MetaItem icon={Clock}     label="Department"         value={job.department} />}
-              {deadline          && <MetaItem icon={Calendar}  label="Application Deadline" value={deadline} />}
+              {job.location && <MetaItem icon={MapPin} label="Location" value={job.location} />}
+              {job.employmentType && <MetaItem icon={Briefcase} label="Employment Type" value={job.employmentType} />}
+              {job.experienceLevel && <MetaItem icon={Award} label="Experience Level" value={job.experienceLevel} />}
+              {job.department && <MetaItem icon={Clock} label="Department" value={job.department} />}
+              {deadline && <MetaItem icon={Calendar} label="Application Deadline" value={deadline} />}
             </div>
 
             {job.isLive && (
@@ -470,11 +567,10 @@ export function JobDetail() {
                 <button
                   type="button"
                   onClick={handleApplyClick}
-                  className={`w-full flex items-center justify-center gap-2 py-3 text-sm font-bold font-body rounded-lg transition-colors ${
-                    showForm
-                      ? 'bg-brand-bg border border-brand-border text-brand-black hover:border-brand-green hover:text-brand-green'
-                      : 'bg-brand-green hover:bg-brand-green-hover text-white'
-                  }`}
+                  className={`w-full flex items-center justify-center gap-2 py-3 text-sm font-bold font-body rounded-lg transition-colors ${showForm
+                    ? 'bg-brand-bg border border-brand-border text-brand-black hover:border-brand-green hover:text-brand-green'
+                    : 'bg-brand-green hover:bg-brand-green-hover text-white'
+                    }`}
                 >
                   {showForm ? 'Hide Application Form' : 'Apply Now'}
                 </button>
