@@ -5,7 +5,7 @@ import { MessageCircle } from 'lucide-react';
  * Floating WhatsApp contact button fixed at the bottom-right of the screen.
  */
 export function WhatsAppButton() {
-  const phoneNumber = "9800400463";
+  const phoneNumber = "919800400463";
   const message = "Hello Om Seva Design & Build, I'd like to enquire about your services.";
   const encodedMessage = encodeURIComponent(message);
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;

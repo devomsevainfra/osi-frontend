@@ -58,7 +58,7 @@ export function Contact() {
     }, 1200);
   };
 
-  const whatsappUrl = "https://wa.me/917020830066?text=Hello%20Om%20Seva%20Design%20%26%20Build%2C%20I'd%20like%20to%20enquire%20about%20your%20services.";
+  const whatsappUrl = "https://wa.me/919800400463?text=Hello%20Om%20Seva%20Design%20%26%20Build%2C%20I'd%20like%20to%20enquire%20about%20your%20services.";
 
   return (
     <div className="flex flex-col w-full">
