@@ -1,2 +1,0 @@
-# osi-frontend
-# osi-backend
